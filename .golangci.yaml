@@ -1,0 +1,8 @@
+linters:
+  enable-all: true
+  disable:
+    - gomnd
+    - lll
+    - gochecknoglobals
+    - forbidigo
+
