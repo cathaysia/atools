@@ -62,6 +62,15 @@ func main() {
 			"-c", "http.sslVerify=false",
 			"-c", "https.sslVerify=false",
 		}, os.Args[2:]...)
+	case "svn":
+		// TODO: 这个还没测试
+		pos := strings.Index(aproxy, ":")
+		os.Args = append([]string{
+			os.Args[0],
+			os.Args[1],
+			"--config-option", fmt.Sprintf("servers:global:http-proxy-host=%s", aproxy[:pos]),
+			"--config-option", fmt.Sprintf("servers:global:http-proxy-port=%s", aproxy[pos:]),
+		}, os.Args[2:]...)
 	}
 
 	runCMD(os.Args[1], os.Args[1:])
