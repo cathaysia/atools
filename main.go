@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
-	"os"
 	"sync"
 	"time"
 
@@ -59,9 +58,7 @@ func Doh(provider string, url string) {
 	}
 
 	if err != nil {
-		os.Stderr.WriteString(err.Error())
-
-		return
+		panic(err.Error())
 	}
 
 	answer := response.Answer
@@ -83,24 +80,18 @@ func IPAddress(url string) {
 
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
-		os.Stderr.WriteString(err.Error())
-
-		return
+		panic(err.Error())
 	}
 
 	defer response.Body.Close()
 
 	if response.StatusCode != 200 {
-		os.Stderr.WriteString(err.Error())
-
-		return
+		panic(err.Error())
 	}
 
 	doc, err := goquery.NewDocumentFromReader(response.Body)
 	if err != nil {
-		os.Stderr.WriteString(err.Error())
-
-		return
+		panic(err.Error())
 	}
 
 	doc.Find("tr>td>.comma-separated").First().Find("li").Each(func(i int, s *goquery.Selection) {
