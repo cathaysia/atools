@@ -10,11 +10,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var waitGroup sync.WaitGroup
+var (
+	waitGroup sync.WaitGroup
 
-var count int
-
-var interval int
+	count    int
+	interval int
+)
 
 type ParameterError struct {
 	message string
@@ -44,7 +45,7 @@ var rootCmd = &cobra.Command{
 			waitGroup.Add(1)
 			time.Sleep(time.Second * time.Duration(interval))
 
-			go runPing(args[0])
+			go httpPing(args[0])
 		}
 		waitGroup.Wait()
 
@@ -63,7 +64,7 @@ func init() {
 	rootCmd.Flags().IntVarP(&interval, "interval", "i", 0, "seconds between sending each packet")
 }
 
-func runPing(url string) {
+func httpPing(url string) {
 	defer waitGroup.Done()
 
 	request, err := http.NewRequestWithContext(context.Background(), "HEAD", url, nil)
@@ -75,7 +76,7 @@ func runPing(url string) {
 
 	start := time.Now().UnixNano()
 	response, err := http.DefaultClient.Do(request)
-	duration := (time.Now().UnixNano() - start) / 1000000
+	duration := (time.Now().UnixNano() - start) / 1e6
 
 	if err != nil {
 		panic(err)
