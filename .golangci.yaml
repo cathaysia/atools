@@ -7,4 +7,5 @@ linters:
     - forbidigo
     - godot
     - gochecknoinits
+    - exhaustivestruct
 
