@@ -73,13 +73,9 @@ func runPing(url string) {
 
 	request.Header.Add("User-Agent", `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36 Edg/87.0.664.66`)
 
-	startT := time.Now().Nanosecond()
+	start := time.Now().UnixNano()
 	response, err := http.DefaultClient.Do(request)
-	startE := time.Now().Nanosecond() - startT
-
-	if startE < 0 {
-		startE = -startE
-	}
+	duration := (time.Now().UnixNano() - start) / 1000000
 
 	if err != nil {
 		panic(err)
@@ -87,5 +83,5 @@ func runPing(url string) {
 
 	response.Body.Close()
 
-	fmt.Printf("ping %v: %v ms\n", url, startE/1000000)
+	fmt.Printf("ping %v: %v ms\n", url, duration)
 }
