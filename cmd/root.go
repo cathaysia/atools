@@ -14,6 +14,8 @@ var waitGroup sync.WaitGroup
 
 var count int
 
+var interval int
+
 type ParameterError struct {
 	message string
 }
@@ -40,6 +42,8 @@ var rootCmd = &cobra.Command{
 		}
 		for i := 0; i < count; i++ {
 			waitGroup.Add(1)
+			time.Sleep(time.Second * time.Duration(interval))
+
 			go runPing(args[0])
 		}
 		waitGroup.Wait()
@@ -56,6 +60,7 @@ func Execute() {
 
 func init() {
 	rootCmd.Flags().IntVarP(&count, "count", "c", 4, "stop after c<ount> replies")
+	rootCmd.Flags().IntVarP(&interval, "interval", "i", 0, "seconds between sending each packet")
 }
 
 func runPing(url string) {
