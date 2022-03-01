@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -86,7 +87,15 @@ func httpPing(url string) {
 
 	response.Body.Close()
 
-	fmt.Printf("ping %v: %v ms\n", url, duration)
+	aurl := strings.Replace(url, "https://", "", 1)
+	aurl = strings.Replace(aurl, "http://", "", 1)
+
+	raddr, err := net.ResolveIPAddr("ip", aurl)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("ping %v (%v): %v ms\n", url, raddr, duration)
 }
 
 // https://www.cnblogs.com/wlw-x/p/14169607.html
@@ -121,7 +130,8 @@ func CheckSum(data []byte) (rt uint16) {
 }
 
 func ICMPPing(url string) {
-    defer waitGroup.Done()
+	defer waitGroup.Done()
+
 	raddr, err := net.ResolveIPAddr("ip", url)
 	if err != nil {
 		panic(err)
@@ -177,5 +187,5 @@ func ICMPPing(url string) {
 
 	duration := (time.Now().UnixNano() - start) / 1e6
 
-	fmt.Printf("ping %v: %v ms\n", url, duration)
+	fmt.Printf("ping %v (%v): %v ms\n", url, raddr, duration)
 }
