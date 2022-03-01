@@ -12,6 +12,8 @@ import (
 
 var waitGroup sync.WaitGroup
 
+var count int
+
 type ParameterError struct {
 	message string
 }
@@ -36,7 +38,7 @@ var rootCmd = &cobra.Command{
 				message: fmt.Sprintf("url 不以 http 开头：%v", args[0]),
 			}
 		}
-		for i := 0; i < 4; i++ {
+		for i := 0; i < count; i++ {
 			waitGroup.Add(1)
 			go runPing(args[0])
 		}
@@ -53,6 +55,7 @@ func Execute() {
 }
 
 func init() {
+	rootCmd.Flags().IntVarP(&count, "count", "c", 4, "stop after c<ount> replies")
 }
 
 func runPing(url string) {
