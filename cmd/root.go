@@ -7,10 +7,14 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"aping/lib"
 	"github.com/spf13/cobra"
 )
 
@@ -19,6 +23,8 @@ var (
 
 	count    int
 	interval int
+
+	sem *lib.Semaphore
 )
 
 type ParameterError struct {
@@ -57,6 +63,32 @@ var rootCmd = &cobra.Command{
 }
 
 func Execute() {
+	// 获取可以打开的文件数量
+	var (
+		fileLimit = 1024
+		cmd       = fmt.Sprintf(`cat /proc/%v/limits | grep files | awk '{print $4}'`, os.Getpid())
+		cmder     = exec.Command("/bin/bash", "-c", cmd)
+	)
+
+	if data, err := cmder.CombinedOutput(); err == nil {
+		fileLimit, _ = strconv.Atoi(strings.ReplaceAll(string(data), "\n", ""))
+	}
+
+	cmder = exec.Command("/bin/bash", "-c", "ls /dev/fd/| wc -l")
+
+	if data, err := cmder.CombinedOutput(); err == nil {
+		if openedFiles, err := strconv.Atoi(strings.ReplaceAll(string(data), "\n", "")); err == nil {
+			fileLimit -= openedFiles
+		}
+	}
+
+	fileLimit -= 2
+	sem = lib.NewSemaphore(fileLimit)
+
+	if transport, ok := http.DefaultTransport.(*http.Transport); ok {
+		transport.MaxIdleConns = fileLimit
+	}
+
 	if err := rootCmd.Execute(); err != nil {
 		panic(err)
 	}
@@ -68,7 +100,10 @@ func init() {
 }
 
 func httpPing(url string) {
+	sem.Acquire()
+
 	defer waitGroup.Done()
+	defer sem.Release()
 
 	var (
 		request  *http.Request
@@ -135,7 +170,10 @@ func CheckSum(data []byte) (rt uint16) {
 }
 
 func ICMPPing(url string) {
+	sem.Acquire()
+
 	defer waitGroup.Done()
+	defer sem.Release()
 
 	var (
 		remoteAddr *net.IPAddr
@@ -187,5 +225,6 @@ func ICMPPing(url string) {
 
 	duration := time.Since(start).Milliseconds()
 
+	conn.Close()
 	fmt.Printf("ping %v (%v): %v ms\n", url, remoteAddr, duration)
 }
