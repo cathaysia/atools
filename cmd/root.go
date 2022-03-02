@@ -70,32 +70,37 @@ func init() {
 func httpPing(url string) {
 	defer waitGroup.Done()
 
-	request, err := http.NewRequestWithContext(context.Background(), "HEAD", url, nil)
-	if err != nil {
+	var (
+		request  *http.Request
+		response *http.Response
+		err      error
+	)
+
+	if request, err = http.NewRequestWithContext(context.Background(), "HEAD", url, nil); err != nil {
 		panic(err)
 	}
 
 	request.Header.Add("User-Agent", `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36 Edg/87.0.664.66`)
 
-	start := time.Now().UnixNano()
-	response, err := http.DefaultClient.Do(request)
-	duration := (time.Now().UnixNano() - start) / 1e6
+	start := time.Now()
 
-	if err != nil {
+	if response, err = http.DefaultClient.Do(request); err != nil {
 		panic(err)
 	}
+
+	elapsed := time.Since(start).Milliseconds()
 
 	response.Body.Close()
 
-	aurl := strings.Replace(url, "https://", "", 1)
-	aurl = strings.Replace(aurl, "http://", "", 1)
+	shortURL := strings.Replace(url, "https://", "", 1)
+	shortURL = strings.Replace(shortURL, "http://", "", 1)
 
-	raddr, err := net.ResolveIPAddr("ip", aurl)
+	raddr, err := net.ResolveIPAddr("ip", shortURL)
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Printf("ping %v (%v): %v ms\n", url, raddr, duration)
+	fmt.Printf("ping %v (%v): %v ms\n", url, raddr, elapsed)
 }
 
 // https://www.cnblogs.com/wlw-x/p/14169607.html
@@ -132,17 +137,17 @@ func CheckSum(data []byte) (rt uint16) {
 func ICMPPing(url string) {
 	defer waitGroup.Done()
 
-	raddr, err := net.ResolveIPAddr("ip", url)
-	if err != nil {
+	var (
+		remoteAddr *net.IPAddr
+		err        error
+		conn       *net.IPConn
+	)
+
+	if remoteAddr, err = net.ResolveIPAddr("ip", url); err != nil {
 		panic(err)
 	}
 
-	laddr := net.IPAddr{
-		IP: net.ParseIP("0.0.0.0"),
-	}
-
-	conn, err := net.DialIP("ip4:icmp", &laddr, raddr)
-	if err != nil {
+	if conn, err = net.DialIP("ip4:icmp", nil, remoteAddr); err != nil {
 		panic(err)
 	}
 
@@ -154,27 +159,22 @@ func ICMPPing(url string) {
 		originBytes = make([]byte, 2000)
 	)
 
-	err = binary.Write(&buffer, binary.BigEndian, icmp)
-
-	if err != nil {
+	if err = binary.Write(&buffer, binary.BigEndian, icmp); err != nil {
 		panic(err)
 	}
 
-	err = binary.Write(&buffer, binary.BigEndian, originBytes[0:64])
-	if err != nil {
+	if err = binary.Write(&buffer, binary.BigEndian, originBytes[0:64]); err != nil {
 		panic(err)
 	}
 
 	b := buffer.Bytes()
 	binary.BigEndian.PutUint16(b[2:], CheckSum(b))
 
-	_, err = conn.Write(buffer.Bytes())
-
-	if err != nil {
+	if _, err = conn.Write(buffer.Bytes()); err != nil {
 		panic(err)
 	}
 
-	start := time.Now().UnixNano()
+	start := time.Now()
 	recv := make([]byte, 1024)
 
 	if err = conn.SetReadDeadline(time.Now().Add(time.Second * 3)); err != nil {
@@ -185,7 +185,7 @@ func ICMPPing(url string) {
 		panic(err)
 	}
 
-	duration := (time.Now().UnixNano() - start) / 1e6
+	duration := time.Since(start).Milliseconds()
 
-	fmt.Printf("ping %v (%v): %v ms\n", url, raddr, duration)
+	fmt.Printf("ping %v (%v): %v ms\n", url, remoteAddr, duration)
 }
