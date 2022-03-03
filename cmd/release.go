@@ -53,11 +53,11 @@ func NewCmdList() *cobra.Command {
         ]
     }
 ]
-
 */
+
 type ReleaseAsset struct {
 	Name string `json:"name"`
-	Url  string `json:"browser_download_url"`
+	URL  string `json:"browser_download_url"`
 }
 
 type ReleaseData struct {
@@ -85,7 +85,9 @@ func runList(repo string) error {
 	if response.StatusCode != 200 {
 		panic(err.Error())
 	}
+
 	jsonData, err := ioutil.ReadAll(response.Body)
+
 	if err != nil {
 		panic(err.Error())
 	}
@@ -101,11 +103,13 @@ func runList(repo string) error {
 	for i := 0; i < len(data); i++ {
 		release := data[i]
 		assets := release.Assets
+
 		for j := 0; j < len(assets); j++ {
 			asset := assets[j]
-			str := fmt.Sprintf("%v %v %v %v", release.Name, release.Date, asset.Name, asset.Url)
+			str := fmt.Sprintf("%v %v %v %v", release.Name, release.Date, asset.Name, asset.URL)
 			fmt.Println(str)
 		}
 	}
+
 	return err
 }
