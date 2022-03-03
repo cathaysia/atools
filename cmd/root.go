@@ -146,9 +146,26 @@ func CheckSum(data []byte) (rt uint16) {
 }
 
 func ICMPPing(url string) {
+	// 构建 ICMP 报文
+	var (
+		buffer bytes.Buffer
+		err    error
+		icmp   = ICMP{8, 0, 0, 0, 0}
+	)
+
+	if err = binary.Write(&buffer, binary.BigEndian, icmp); err != nil {
+		panic(err)
+	}
+
+	icmp.CheckSum = CheckSum(buffer.Bytes())
+	buffer.Reset()
+
+	if err = binary.Write(&buffer, binary.BigEndian, icmp); err != nil {
+		panic(err)
+	}
+
 	var (
 		remoteAddr *net.IPAddr
-		err        error
 		conn       *net.IPConn
 	)
 
@@ -156,34 +173,20 @@ func ICMPPing(url string) {
 		panic(err)
 	}
 
+	start := time.Now()
+
+	// 发送 ICMP 包
 	if conn, err = net.DialIP("ip4:icmp", nil, remoteAddr); err != nil {
 		panic(err)
 	}
 
 	defer conn.Close()
 
-	var (
-		buffer      bytes.Buffer
-		icmp        = ICMP{8, 0, 0, 0, 0}
-		originBytes = make([]byte, 2000)
-	)
-
-	if err = binary.Write(&buffer, binary.BigEndian, icmp); err != nil {
-		panic(err)
-	}
-
-	if err = binary.Write(&buffer, binary.BigEndian, originBytes[0:64]); err != nil {
-		panic(err)
-	}
-
-	b := buffer.Bytes()
-	binary.BigEndian.PutUint16(b[2:], CheckSum(b))
-
 	if _, err = conn.Write(buffer.Bytes()); err != nil {
 		panic(err)
 	}
 
-	start := time.Now()
+	// 读取返回的包
 	recv := make([]byte, 1024)
 
 	if err = conn.SetReadDeadline(time.Now().Add(time.Second * 3)); err != nil {
