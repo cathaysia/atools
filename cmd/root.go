@@ -8,21 +8,14 @@ import (
 	"net"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
-	"aping/lib"
 	"github.com/spf13/cobra"
 )
 
 var (
-	waitGroup sync.WaitGroup
-
 	count    int
 	interval int
-	sockets  int
-
-	sem *lib.Semaphore
 )
 
 type ParameterError struct {
@@ -40,28 +33,18 @@ var rootCmd = &cobra.Command{
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args[0]) > 4 && args[0][0:4] == "http" {
-			if transport, ok := http.DefaultTransport.(*http.Transport); ok {
-				transport.MaxIdleConns = sockets
-				transport.MaxIdleConnsPerHost = 0
-				transport.MaxConnsPerHost = sockets
-				transport.DisableKeepAlives = true
-			}
 			for i := 0; i < count; i++ {
-				waitGroup.Add(1)
 				time.Sleep(time.Second * time.Duration(interval))
 
-				go httpPing(args[0])
+				httpPing(args[0])
 			}
 		} else {
-			sem = lib.NewSemaphore(sockets)
 			for i := 0; i < count; i++ {
-				waitGroup.Add(1)
 				time.Sleep(time.Second * time.Duration(interval))
 
-				go ICMPPing(args[0])
+				ICMPPing(args[0])
 			}
 		}
-		waitGroup.Wait()
 
 		return nil
 	},
@@ -76,12 +59,9 @@ func Execute() {
 func init() {
 	rootCmd.Flags().IntVarP(&count, "count", "c", 4, "stop after c<ount> replies")
 	rootCmd.Flags().IntVarP(&interval, "interval", "i", 0, "seconds between sending each packet")
-	rootCmd.Flags().IntVarP(&sockets, "sockets", "s", 200, "limit number of sockets that program can opened")
 }
 
 func httpPing(url string) {
-	defer waitGroup.Done()
-
 	var (
 		request  *http.Request
 		response *http.Response
@@ -147,11 +127,6 @@ func CheckSum(data []byte) (rt uint16) {
 }
 
 func ICMPPing(url string) {
-	sem.Acquire()
-
-	defer waitGroup.Done()
-	defer sem.Release()
-
 	var (
 		remoteAddr *net.IPAddr
 		err        error
