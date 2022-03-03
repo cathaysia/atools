@@ -48,10 +48,9 @@ var rootCmd = &cobra.Command{
 			}
 		} else {
 			for i := 0; i < count; i++ {
-                waitGroup.Add(1)
 				time.Sleep(time.Second * time.Duration(interval))
 
-				go ICMPPing(args[0])
+				ICMPPing(args[0])
 			}
 		}
 		waitGroup.Wait()
@@ -147,11 +146,6 @@ func CheckSum(data []byte) (rt uint16) {
 }
 
 func ICMPPing(url string) {
-	sem.Acquire()
-
-	defer waitGroup.Done()
-	defer sem.Release()
-
 	var (
 		remoteAddr *net.IPAddr
 		err        error
@@ -201,8 +195,6 @@ func ICMPPing(url string) {
 	}
 
 	duration := time.Since(start).Milliseconds()
-
-	runtime.Gosched()
 
 	conn.Close()
 	fmt.Printf("ping %v (%v): %v ms\n", url, remoteAddr, duration)
