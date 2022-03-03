@@ -7,9 +7,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"os"
-	"os/exec"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -23,6 +20,7 @@ var (
 
 	count    int
 	interval int
+	sockets  int
 
 	sem *lib.Semaphore
 )
@@ -42,6 +40,12 @@ var rootCmd = &cobra.Command{
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args[0]) > 4 && args[0][0:4] == "http" {
+			if transport, ok := http.DefaultTransport.(*http.Transport); ok {
+				transport.MaxIdleConns = sockets
+				transport.MaxIdleConnsPerHost = 0
+				transport.MaxConnsPerHost = sockets
+				transport.DisableKeepAlives = true
+			}
 			for i := 0; i < count; i++ {
 				waitGroup.Add(1)
 				time.Sleep(time.Second * time.Duration(interval))
@@ -49,6 +53,7 @@ var rootCmd = &cobra.Command{
 				go httpPing(args[0])
 			}
 		} else {
+			sem = lib.NewSemaphore(sockets)
 			for i := 0; i < count; i++ {
 				waitGroup.Add(1)
 				time.Sleep(time.Second * time.Duration(interval))
@@ -63,32 +68,6 @@ var rootCmd = &cobra.Command{
 }
 
 func Execute() {
-	// 获取可以打开的文件数量
-	var (
-		fileLimit = 1024
-		cmd       = fmt.Sprintf(`cat /proc/%v/limits | grep files | awk '{print $4}'`, os.Getpid())
-		cmder     = exec.Command("/bin/bash", "-c", cmd)
-	)
-
-	if data, err := cmder.CombinedOutput(); err == nil {
-		fileLimit, _ = strconv.Atoi(strings.ReplaceAll(string(data), "\n", ""))
-	}
-
-	cmder = exec.Command("/bin/bash", "-c", "ls /dev/fd/| wc -l")
-
-	if data, err := cmder.CombinedOutput(); err == nil {
-		if openedFiles, err := strconv.Atoi(strings.ReplaceAll(string(data), "\n", "")); err == nil {
-			fileLimit -= openedFiles
-		}
-	}
-
-	fileLimit -= 2
-	sem = lib.NewSemaphore(fileLimit)
-
-	if transport, ok := http.DefaultTransport.(*http.Transport); ok {
-		transport.MaxIdleConns = fileLimit
-	}
-
 	if err := rootCmd.Execute(); err != nil {
 		panic(err)
 	}
@@ -97,13 +76,11 @@ func Execute() {
 func init() {
 	rootCmd.Flags().IntVarP(&count, "count", "c", 4, "stop after c<ount> replies")
 	rootCmd.Flags().IntVarP(&interval, "interval", "i", 0, "seconds between sending each packet")
+	rootCmd.Flags().IntVarP(&sockets, "sockets", "s", 200, "limit number of sockets that program can opened")
 }
 
 func httpPing(url string) {
-	sem.Acquire()
-
 	defer waitGroup.Done()
-	defer sem.Release()
 
 	var (
 		request  *http.Request
