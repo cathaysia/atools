@@ -7,15 +7,22 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"runtime"
 	"strings"
+	"sync"
 	"time"
 
+	"aping/lib"
 	"github.com/spf13/cobra"
 )
 
 var (
-	count    int
-	interval int
+	count     int
+	interval  int
+	coroutine int
+
+	waitGroup sync.WaitGroup
+	sem       *lib.Semaphore
 )
 
 type ParameterError struct {
@@ -34,23 +41,28 @@ var rootCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args[0]) > 4 && args[0][0:4] == "http" {
 			for i := 0; i < count; i++ {
+				waitGroup.Add(1)
 				time.Sleep(time.Second * time.Duration(interval))
 
-				httpPing(args[0])
+				go httpPing(args[0])
 			}
 		} else {
 			for i := 0; i < count; i++ {
+                waitGroup.Add(1)
 				time.Sleep(time.Second * time.Duration(interval))
 
-				ICMPPing(args[0])
+				go ICMPPing(args[0])
 			}
 		}
+		waitGroup.Wait()
 
 		return nil
 	},
 }
 
 func Execute() {
+	sem = lib.NewSemaphore(coroutine)
+
 	if err := rootCmd.Execute(); err != nil {
 		panic(err)
 	}
@@ -59,9 +71,15 @@ func Execute() {
 func init() {
 	rootCmd.Flags().IntVarP(&count, "count", "c", 4, "stop after c<ount> replies")
 	rootCmd.Flags().IntVarP(&interval, "interval", "i", 0, "seconds between sending each packet")
+	rootCmd.Flags().IntVar(&coroutine, "coroutine", 10, "coroutine that can be opend. Too many coroutine may cause inaccurate time")
 }
 
 func httpPing(url string) {
+	sem.Acquire()
+
+	defer waitGroup.Done()
+	defer sem.Release()
+
 	var (
 		request  *http.Request
 		response *http.Response
@@ -81,6 +99,8 @@ func httpPing(url string) {
 	}
 
 	elapsed := time.Since(start).Milliseconds()
+
+	runtime.Gosched()
 
 	response.Body.Close()
 
@@ -127,6 +147,11 @@ func CheckSum(data []byte) (rt uint16) {
 }
 
 func ICMPPing(url string) {
+	sem.Acquire()
+
+	defer waitGroup.Done()
+	defer sem.Release()
+
 	var (
 		remoteAddr *net.IPAddr
 		err        error
@@ -176,6 +201,8 @@ func ICMPPing(url string) {
 	}
 
 	duration := time.Since(start).Milliseconds()
+
+	runtime.Gosched()
 
 	conn.Close()
 	fmt.Printf("ping %v (%v): %v ms\n", url, remoteAddr, duration)
