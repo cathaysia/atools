@@ -9,10 +9,11 @@ import (
 	"net/http"
 	"runtime"
 	"strings"
-	"sync"
 	"time"
 
 	"aping/lib"
+
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -21,8 +22,9 @@ var (
 	interval  int
 	coroutine int
 
-	waitGroup sync.WaitGroup
 	sem       *lib.Semaphore
+	ErrorChan chan error
+	DoneChan  chan bool
 )
 
 type ParameterError struct {
@@ -40,26 +42,24 @@ var rootCmd = &cobra.Command{
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args[0]) > 4 && args[0][0:4] == "http" {
-			for i := 0; i < count; i++ {
-				waitGroup.Add(1)
-				time.Sleep(time.Second * time.Duration(interval))
-
-				go httpPing(args[0])
-			}
+			go doHTTPPing(args[0], count)
 		} else {
-			for i := 0; i < count; i++ {
-				time.Sleep(time.Second * time.Duration(interval))
-
-				ICMPPing(args[0])
+			go doICMPPing(args[0], count)
+		}
+		for {
+			select {
+			case err := <-ErrorChan:
+				logrus.Error(err)
+			case <-DoneChan:
+				return nil
 			}
 		}
-		waitGroup.Wait()
-
-		return nil
 	},
 }
 
 func Execute() {
+	ErrorChan = make(chan error)
+	DoneChan = make(chan bool)
 	sem = lib.NewSemaphore(coroutine)
 
 	if err := rootCmd.Execute(); err != nil {
@@ -73,12 +73,37 @@ func init() {
 	rootCmd.Flags().IntVar(&coroutine, "coroutine", 10, "coroutine that can be opend. Too many coroutine may cause inaccurate time")
 }
 
-func httpPing(url string) {
-	sem.Acquire()
+func doHTTPPing(url string, count int) {
+	for i := 0; i < count; i++ {
+		sem.Acquire()
 
-	defer waitGroup.Done()
-	defer sem.Release()
+		defer sem.Release()
 
+		time.Sleep(time.Second * time.Duration(interval))
+
+		if err := httpPing(url); err != nil {
+			ErrorChan <- err
+		}
+	}
+	DoneChan <- true
+}
+
+func doICMPPing(url string, count int) {
+	for i := 0; i < count; i++ {
+		sem.Acquire()
+
+		defer sem.Release()
+
+		time.Sleep(time.Second * time.Duration(interval))
+
+		if err := ICMPPing(url); err != nil {
+			ErrorChan <- err
+		}
+	}
+	DoneChan <- true
+}
+
+func httpPing(url string) error {
 	var (
 		request  *http.Request
 		response *http.Response
@@ -86,7 +111,7 @@ func httpPing(url string) {
 	)
 
 	if request, err = http.NewRequestWithContext(context.Background(), "HEAD", url, nil); err != nil {
-		panic(err)
+		return err
 	}
 
 	request.Header.Add("User-Agent", `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36 Edg/87.0.664.66`)
@@ -94,7 +119,7 @@ func httpPing(url string) {
 	start := time.Now()
 
 	if response, err = http.DefaultClient.Do(request); err != nil {
-		panic(err)
+		return err
 	}
 
 	elapsed := time.Since(start).Milliseconds()
@@ -108,10 +133,12 @@ func httpPing(url string) {
 
 	raddr, err := net.ResolveIPAddr("ip", shortURL)
 	if err != nil {
-		panic(err)
+		ErrorChan <- err
 	}
 
 	fmt.Printf("ping %v (%v): %v ms\n", url, raddr, elapsed)
+
+	return nil
 }
 
 // https://www.cnblogs.com/wlw-x/p/14169607.html
@@ -145,7 +172,7 @@ func CheckSum(data []byte) (rt uint16) {
 	return ^rt
 }
 
-func ICMPPing(url string) {
+func ICMPPing(url string) error {
 	// 构建 ICMP 报文
 	var (
 		buffer bytes.Buffer
@@ -154,14 +181,14 @@ func ICMPPing(url string) {
 	)
 
 	if err = binary.Write(&buffer, binary.BigEndian, icmp); err != nil {
-		panic(err)
+		return err
 	}
 
 	icmp.CheckSum = CheckSum(buffer.Bytes())
 	buffer.Reset()
 
 	if err = binary.Write(&buffer, binary.BigEndian, icmp); err != nil {
-		panic(err)
+		return err
 	}
 
 	var (
@@ -170,35 +197,37 @@ func ICMPPing(url string) {
 	)
 
 	if remoteAddr, err = net.ResolveIPAddr("ip", url); err != nil {
-		panic(err)
+		return err
 	}
 
 	start := time.Now()
 
 	// 发送 ICMP 包
 	if conn, err = net.DialIP("ip4:icmp", nil, remoteAddr); err != nil {
-		panic(err)
+		return err
 	}
 
 	defer conn.Close()
 
 	if _, err = conn.Write(buffer.Bytes()); err != nil {
-		panic(err)
+		return err
 	}
 
 	// 读取返回的包
 	recv := make([]byte, 1024)
 
 	if err = conn.SetReadDeadline(time.Now().Add(time.Second * 3)); err != nil {
-		panic(err)
+		return err
 	}
 
 	if _, err = conn.Read(recv); err != nil {
-		panic(err)
+		return err
 	}
 
 	duration := time.Since(start).Milliseconds()
 
 	conn.Close()
 	fmt.Printf("ping %v (%v): %v ms\n", url, remoteAddr, duration)
+
+	return nil
 }
