@@ -103,6 +103,14 @@ func doICMPPing(url string, count int) {
 	DoneChan <- true
 }
 
+func RequestFailError(err error) error {
+	return fmt.Errorf("RequestFailError: %w", err)
+}
+
+func ICMPError(err error) error {
+	return fmt.Errorf("ICMPError: %w", err)
+}
+
 func httpPing(url string) error {
 	var (
 		request  *http.Request
@@ -111,7 +119,7 @@ func httpPing(url string) error {
 	)
 
 	if request, err = http.NewRequestWithContext(context.Background(), "HEAD", url, nil); err != nil {
-		return err
+		return RequestFailError(err)
 	}
 
 	request.Header.Add("User-Agent", `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36 Edg/87.0.664.66`)
@@ -119,7 +127,7 @@ func httpPing(url string) error {
 	start := time.Now()
 
 	if response, err = http.DefaultClient.Do(request); err != nil {
-		return err
+		return RequestFailError(err)
 	}
 
 	elapsed := time.Since(start).Milliseconds()
@@ -181,14 +189,14 @@ func ICMPPing(url string) error {
 	)
 
 	if err = binary.Write(&buffer, binary.BigEndian, icmp); err != nil {
-		return err
+		return ICMPError(err)
 	}
 
 	icmp.CheckSum = CheckSum(buffer.Bytes())
 	buffer.Reset()
 
 	if err = binary.Write(&buffer, binary.BigEndian, icmp); err != nil {
-		return err
+		return ICMPError(err)
 	}
 
 	var (
@@ -197,31 +205,31 @@ func ICMPPing(url string) error {
 	)
 
 	if remoteAddr, err = net.ResolveIPAddr("ip", url); err != nil {
-		return err
+		return ICMPError(err)
 	}
 
 	start := time.Now()
 
 	// 发送 ICMP 包
 	if conn, err = net.DialIP("ip4:icmp", nil, remoteAddr); err != nil {
-		return err
+		return ICMPError(err)
 	}
 
 	defer conn.Close()
 
 	if _, err = conn.Write(buffer.Bytes()); err != nil {
-		return err
+		return ICMPError(err)
 	}
 
 	// 读取返回的包
 	recv := make([]byte, 1024)
 
 	if err = conn.SetReadDeadline(time.Now().Add(time.Second * 3)); err != nil {
-		return err
+		return ICMPError(err)
 	}
 
 	if _, err = conn.Read(recv); err != nil {
-		return err
+		return ICMPError(err)
 	}
 
 	duration := time.Since(start).Milliseconds()
