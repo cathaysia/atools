@@ -37,6 +37,12 @@ func runCMD(cmd string, args []string) {
 }
 
 func main() {
+	if len(os.Args) == 1 {
+		fmt.Println("Usage: aproxy [<command>]")
+
+		return
+	}
+
 	aproxy := os.Getenv("APROXY")
 	if len(aproxy) == 0 {
 		runCMD(os.Args[1], os.Args[2:])
