@@ -27,13 +27,16 @@ func runCMD(cmd string, args []string) {
 	proc.Stdin = os.Stdin
 	proc.Args = args
 
-	if err := proc.Run(); err != nil {
-		if exitError, ok := err.(*exec.ExitError); ok {
-			os.Exit(exitError.ExitCode())
-		} else {
-			panic(err)
-		}
+	err := proc.Run()
+	if err == nil {
+		return
 	}
+
+	if exitError, ok := err.(*exec.ExitError); ok {
+		os.Exit(exitError.ExitCode())
+	}
+
+	panic(err)
 }
 
 func main() {
