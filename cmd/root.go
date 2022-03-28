@@ -23,7 +23,7 @@ var rootCmd = &cobra.Command{
 	Use:   "aping [<url>]",
 	Short: "a ping with ability of http/https",
 	Long:  `a ping tool for http/https`,
-	Args:  cobra.MaximumNArgs(1),
+	Args:  cobra.ExactArgs(1),
 	Run:   doPing,
 }
 
@@ -31,7 +31,7 @@ func Execute() {
 	sem = internal.NewSemaphore(coroutine)
 
 	if err := rootCmd.Execute(); err != nil {
-		panic(err)
+		logrus.Error(err)
 	}
 }
 
@@ -54,7 +54,7 @@ func doPing(cmd *cobra.Command, args []string) {
 		}
 	}
 
-    waitDog.Add(count)
+	waitDog.Add(count)
 	if len(args[0]) > 4 && args[0][0:4] == "http" {
 		for i := 0; i < count; i++ {
 			time.Sleep(time.Second * time.Duration(interval))
