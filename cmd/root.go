@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"sync"
 	"time"
 
 	"aping/internal"
+
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -13,9 +15,8 @@ var (
 	interval  int
 	coroutine int
 
-	sem       *internal.Semaphore
-	ErrorChan chan error
-	DoneChan  chan bool
+	sem     *internal.Semaphore
+	waitDog sync.WaitGroup
 )
 
 var rootCmd = &cobra.Command{
@@ -27,8 +28,6 @@ var rootCmd = &cobra.Command{
 }
 
 func Execute() {
-	ErrorChan = make(chan error)
-	DoneChan = make(chan bool)
 	sem = internal.NewSemaphore(coroutine)
 
 	if err := rootCmd.Execute(); err != nil {
@@ -43,44 +42,32 @@ func init() {
 }
 
 func doPing(cmd *cobra.Command, args []string) {
-	if len(args[0]) > 4 && args[0][0:4] == "http" {
-		go func() {
-			for i := 0; i < count; i++ {
-				sem.Acquire()
+	wgWrap := func(f func(string) error, url string) {
+		sem.Acquire()
+		defer sem.Release()
+		defer waitDog.Done()
 
-				defer sem.Release()
-
-				time.Sleep(time.Second * time.Duration(interval))
-
-				if err := internal.HTTPPing(args[0]); err != nil {
-					ErrorChan <- err
-				}
-			}
-			DoneChan <- true
-		}()
-	} else {
-		go func() {
-			for i := 0; i < count; i++ {
-				sem.Acquire()
-
-				defer sem.Release()
-
-				time.Sleep(time.Second * time.Duration(interval))
-
-				if err := internal.ICMPPing(args[0]); err != nil {
-					ErrorChan <- err
-				}
-			}
-			DoneChan <- true
-		}()
-	}
-
-	for {
-		select {
-		case err := <-ErrorChan:
+		if err := f(url); err != nil {
 			logrus.Error(err)
-		case <-DoneChan:
+
 			return
 		}
 	}
+
+    waitDog.Add(count)
+	if len(args[0]) > 4 && args[0][0:4] == "http" {
+		for i := 0; i < count; i++ {
+			time.Sleep(time.Second * time.Duration(interval))
+
+			go wgWrap(internal.HTTPPing, args[0])
+		}
+	} else {
+		for i := 0; i < count; i++ {
+			time.Sleep(time.Second * time.Duration(interval))
+
+			go wgWrap(internal.ICMPPing, args[0])
+		}
+	}
+
+	waitDog.Wait()
 }
