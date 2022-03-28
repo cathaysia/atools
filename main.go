@@ -1,102 +1,21 @@
 package main
 
 import (
-	"context"
+	"anslookup/internal"
 	"flag"
 	"fmt"
-	"net/http"
 	"sync"
-	"time"
 
-	"github.com/PuerkitoBio/goquery"
-	"github.com/likexian/doh-go"
-	"github.com/likexian/doh-go/dns"
+	"github.com/sirupsen/logrus"
 )
 
 var waitGroup sync.WaitGroup
 
-func Output(website string, ip string) {
-	str := fmt.Sprintf("Name: %v Address: %v", website, ip)
-	fmt.Println(str)
-}
-
-// Cloudflare
-// DNSPod
-// Google
-// Quad9
-// auto
-
-func Doh(provider string, url string) {
-	defer waitGroup.Done()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	var response *dns.Response
-
-	var err error
-
-	switch provider {
-	case "auto":
-		c := doh.Use(doh.Quad9Provider, doh.DNSPodProvider, doh.CloudflareProvider, doh.GoogleProvider)
-		response, err = c.Query(ctx, dns.Domain(url), dns.TypeA)
-		c.Close()
-	case "Cloudflare":
-		c := doh.New(doh.CloudflareProvider)
-		response, err = c.Query(ctx, dns.Domain(url), dns.TypeA)
-	case "DNSPod":
-		c := doh.New(doh.DNSPodProvider)
-		response, err = c.Query(ctx, dns.Domain(url), dns.TypeA)
-	case "Google":
-		c := doh.New(doh.GoogleProvider)
-		response, err = c.Query(ctx, dns.Domain(url), dns.TypeA)
-	case "Quad9":
-		c := doh.New(doh.Quad9Provider)
-		response, err = c.Query(ctx, dns.Domain(url), dns.TypeA)
-	default:
-		panic(fmt.Sprintf("The dns provider %v is invaild\n", provider))
+func Output(res map[string]string) {
+	for website, ip := range res {
+		str := fmt.Sprintf("Name: %v Address: %v", website, ip)
+		fmt.Println(str)
 	}
-
-	if err != nil {
-		panic(err.Error())
-	}
-
-	answer := response.Answer
-
-	for _, a := range answer {
-		Output(url, a.Data)
-	}
-}
-
-func IPAddress(url string) {
-	defer waitGroup.Done()
-
-	request, err := http.NewRequestWithContext(context.Background(), "GET", "https://www.ipaddress.com/search/"+url, nil)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	request.Header.Add("User-Agent", `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36 Edg/87.0.664.66`)
-
-	response, err := http.DefaultClient.Do(request)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	defer response.Body.Close()
-
-	if response.StatusCode != 200 {
-		panic(err.Error())
-	}
-
-	doc, err := goquery.NewDocumentFromReader(response.Body)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	doc.Find("tr>td>.comma-separated").First().Find("li").Each(func(i int, s *goquery.Selection) {
-		Output(url, s.Text())
-	})
 }
 
 func main() {
@@ -105,13 +24,39 @@ func main() {
 	flag.Parse()
 
 	websites := flag.Args()
+
+	dogDoh := func(provider, url string) {
+		defer waitGroup.Done()
+
+		res, err := internal.Doh(provider, url)
+		if err != nil {
+			logrus.Error(err)
+
+			return
+		}
+
+		Output(res)
+	}
+	dogIPAddress := func(url string) {
+		defer waitGroup.Done()
+
+		res, err := internal.IPAddress(url)
+		if err != nil {
+			logrus.Error(err)
+
+			return
+		}
+
+		Output(res)
+	}
+
 	waitGroup.Add(len(websites))
 
 	for _, url := range websites {
 		if *useDoh {
-			go Doh(*doh, url)
+			go dogDoh(*doh, url)
 		} else {
-			go IPAddress(url)
+			go dogIPAddress(url)
 		}
 	}
 
