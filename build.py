@@ -123,11 +123,11 @@ def install_app(app: str):
 def strip_app(file_path: str):
     strip_path = '/usr/bin/strip'
     if not os.path.exists(strip_path):
-        logging.error("strip 不存在")
+        logging.error("strip 不存在： %s", strip_path)
         return
-    res = subprocess.call('strip "{}"'.format(file_path), shell=True)
+    res = subprocess.call('{} "{}"'.format(strip_path, file_path), shell=True)
     if res != 0:
-        logging.error("strip 失败： {}", strip_path)
+        logging.error("strip 失败")
         return
 
 
