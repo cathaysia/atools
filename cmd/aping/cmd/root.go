@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"aping/internal"
+	"atools/internal"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
