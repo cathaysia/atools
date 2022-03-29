@@ -38,7 +38,7 @@ def parse_cmdline() -> argparse.Namespace:
     apps = ALLOWED_APPS[:]
     apps.append('all')
 
-    parser.add_argument('-B', '--build-type', type=str, choices=['Debug', 'Release'], default='Release', required=False,
+    parser.add_argument('-B', '--build-type', type=str, choices=['Debug', 'Release'], default='Debug', required=False,
                         help='set build type')
     parser.add_argument('-i', '--install', action='store_true',
                         required=False, help='Install apps')
@@ -92,6 +92,7 @@ def move_app(app: str):
     file_path = os.path.join(os.getcwd(), app)
     if not os.path.exists(file_path):
         return
+    strip_app(file_path)
     bin_path = os.path.join(os.getcwd(), 'bin')
     if not os.path.exists(bin_path):
         os.mkdir(bin_path)
@@ -117,6 +118,17 @@ def install_app(app: str):
     res = subprocess.call('mv {} {}'.format(file_path, des_path), shell=True)
     if res != 0:
         logging.error("安装 app 失败： %s", app)
+
+
+def strip_app(file_path: str):
+    strip_path = '/usr/bin/strip'
+    if not os.path.exists(strip_path):
+        logging.error("strip 不存在")
+        return
+    res = subprocess.call('strip "{}"'.format(file_path), shell=True)
+    if res != 0:
+        logging.error("strip 失败： {}", strip_path)
+        return
 
 
 if __name__ == "__main__":
