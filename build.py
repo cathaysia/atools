@@ -81,7 +81,7 @@ def get_build_apps(apps: List[str]) -> List[str]:
 
 def build_app(app: str, flag: str) -> None:
     cmd = 'go build {} ./cmd/{}'.format(flag, app)
-    logging.debug('run command: "{}"'.format(cmd))
+    logging.debug('run command: %s', cmd)
     res = subprocess.call(cmd, shell=True)
     if res != 0:
         logging.error("Fail to build %s", app)
@@ -103,10 +103,15 @@ def move_app(app: str):
 
 def install_app(app: str):
     des_path = os.getenv('GOPATH')
-    if des_path == '':
+    if des_path is None:
+        logging.error("请设置 GOPATH 环境变量")
         return
+    des_path = os.path.join(des_path, 'bin')
+    if not os.path.exists(des_path):
+        os.mkdir(des_path)
     file_path = os.path.join(os.getcwd(), 'bin/'+app)
     if not os.path.exists(file_path):
+        logging.error("app 安装失败: %s", app)
         return
 
     res = subprocess.call('mv {} {}'.format(file_path, des_path), shell=True)
