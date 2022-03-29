@@ -1,15 +1,20 @@
 #!/bin/python3
 import os
+import sys
 import logging
 import argparse
 import subprocess
 from typing import List
 
+ALLOWED_APPS = [
+    'aghc',
+    'anslookup',
+    'aping',
+    'aproxy',
+]
+
 
 def setLogger(level: str):
-    bad = False
-    if level is None:
-        level = "Warning"
     level_int = 0
     if level == 'Info':
         level_int = logging.INFO
@@ -21,49 +26,50 @@ def setLogger(level: str):
         level_int = logging.ERROR
     elif level == 'Critical':
         level_int = logging.CRITICAL
-    else:
-        bad = True
 
     logging.basicConfig(
         level=level_int,
         format="%(levelname)s: %(message)s"
     )
-    if bad:
-        logging.error("log level error: %s", level)
-        exit(1)
 
 
 def parse_cmdline() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
+    apps = ALLOWED_APPS[:]
+    apps.append('all')
 
-    parser.add_argument('-B', '--build-type', required=False,
-                        help='set build type: Debug|Release')
-    parser.add_argument('apps', nargs='*', help='apps need be build')
+    parser.add_argument('-B', '--build-type', type=str, choices=['Debug', 'Release'], default='Release', required=False,
+                        help='set build type')
+    parser.add_argument('-i', '--install', action='store_true',
+                        required=False, help='Install apps')
+    parser.add_argument('apps', nargs='*', choices=apps,
+                        help='apps need be build')
 
-    parser.add_argument('--log', required=False, help="Set log level")
+    parser.add_argument('--log', required=False, choices=[
+                        'Debug', 'Info', 'Warning', 'Error', 'Critical'], default='Warning', help="Set log level")
 
+    if len(sys.argv) < 2:
+        print(parser.format_help())
+        exit(0)
     arg_res = parser.parse_args()
 
     return arg_res
 
 
 def get_build_flags(build_type: str) -> str:
-    if build_type == None:
-        build_type = 'Release'
     flags = ''
     if build_type == 'Release':
         flags = '-gcflags "-N -l"'
     elif build_type == 'Debug':
         flags = '-ldflags "-s -w"'
-    else:
-        logging.critical("build type error: %s", build_type)
-        exit(1)
     return flags
 
 
 # 检查需要构建的 app
 def get_build_apps(apps: List[str]) -> List[str]:
     build_apps = list()
+    if 'all' in apps:
+        return ALLOWED_APPS
     for app in apps:
         app_path = os.path.join(os.getcwd(), 'cmd/'+app)
         if not os.path.exists(app_path):
@@ -76,7 +82,36 @@ def get_build_apps(apps: List[str]) -> List[str]:
 def build_app(app: str, flag: str) -> None:
     cmd = 'go build {} ./cmd/{}'.format(flag, app)
     logging.debug('run command: "{}"'.format(cmd))
-    subprocess.call(cmd, shell=True)
+    res = subprocess.call(cmd, shell=True)
+    if res != 0:
+        logging.error("Fail to build %s", app)
+        exit(1)
+
+
+def move_app(app: str):
+    file_path = os.path.join(os.getcwd(), app)
+    if not os.path.exists(file_path):
+        return
+    bin_path = os.path.join(os.getcwd(), 'bin')
+    if not os.path.exists(bin_path):
+        os.mkdir(bin_path)
+
+    res = subprocess.call('mv {} {}'.format(file_path, bin_path), shell=True)
+    if res != 0:
+        logging.error("移动 app 失败： %s", app)
+
+
+def install_app(app: str):
+    des_path = os.getenv('GOPATH')
+    if des_path == '':
+        return
+    file_path = os.path.join(os.getcwd(), 'bin/'+app)
+    if not os.path.exists(file_path):
+        return
+
+    res = subprocess.call('mv {} {}'.format(file_path, des_path), shell=True)
+    if res != 0:
+        logging.error("安装 app 失败： %s", app)
 
 
 if __name__ == "__main__":
@@ -88,3 +123,7 @@ if __name__ == "__main__":
 
     for app in apps:
         build_app(app, flag)
+        move_app(app)
+        if args.install != None:
+            logging.debug("安装 app: %s", app)
+            install_app(app)
