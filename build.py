@@ -15,20 +15,16 @@ ALLOWED_APPS = [
 
 
 def setLogger(level: str):
-    level_int = 0
-    if level == 'Info':
-        level_int = logging.INFO
-    elif level == 'Debug':
-        level_int = logging.DEBUG
-    elif level == 'Warning':
-        level_int = logging.WARNING
-    elif level == 'Error':
-        level_int = logging.ERROR
-    elif level == 'Critical':
-        level_int = logging.CRITICAL
+    log_level = {
+        'Debug': logging.DEBUG,
+        'Info': logging.INFO,
+        'Warning': logging.WARNING,
+        'Error': logging.ERROR,
+        'Critical': logging.CRITICAL
+    }
 
     logging.basicConfig(
-        level=level_int,
+        level=log_level[level],
         format="%(levelname)s: %(message)s"
     )
 
