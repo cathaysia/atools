@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -32,33 +33,34 @@ func runCMD(cmd string, args []string) {
 		return
 	}
 
-	if exitError, ok := err.(*exec.ExitError); ok {
+	var exitError exec.ExitError
+
+	if ok := errors.As(err, &exitError); ok {
 		os.Exit(exitError.ExitCode())
 	}
 
 	panic(err)
 }
 
-func main() {
+func checkArgs() {
 	if len(os.Args) == 1 {
 		fmt.Println("Usage: aproxy [<command>]")
 
-		return
+		os.Exit(0)
+	}
+}
+
+func setEnvByMap(envs map[string]string) error {
+	for name, value := range envs {
+		if err := os.Setenv(name, value); err != nil {
+			return err
+		}
 	}
 
-	aproxy := os.Getenv("APROXY")
-	if len(aproxy) == 0 {
-		runCMD(os.Args[1], os.Args[2:])
+	return nil
+}
 
-		return
-	}
-
-	os.Setenv("ALL_PROXY", aproxy)
-	os.Setenv("http_proxy", aproxy)
-	os.Setenv("https_proxy", aproxy)
-	os.Setenv("ftp_proxy", aproxy)
-	os.Setenv("GOPROXY", "https://goproxy.cn")
-
+func setAlias(aproxy string) {
 	switch os.Args[1] {
 	case "curl":
 		os.Args = append(os.Args, "--proxy", aproxy)
@@ -80,6 +82,29 @@ func main() {
 			"--config-option", fmt.Sprintf("servers:global:http-proxy-host=%s", aproxy[:pos]),
 			"--config-option", fmt.Sprintf("servers:global:http-proxy-port=%s", aproxy[pos:]),
 		}, os.Args[2:]...)
+	}
+}
+
+func main() {
+	checkArgs()
+
+	aproxy, ok := os.LookupEnv("APROXY")
+	if !ok {
+		runCMD(os.Args[1], os.Args[2:])
+
+		return
+	}
+
+	envs := map[string]string{
+		"ALL_PROXY":   aproxy,
+		"http_proxy":  aproxy,
+		"https_proxy": aproxy,
+		"ftp_proxy":   aproxy,
+		"GOPROXY":     "https://goproxy.cn",
+	}
+
+	if err := setEnvByMap(envs); err != nil {
+		panic(err)
 	}
 
 	runCMD(os.Args[1], os.Args[1:])
