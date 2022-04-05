@@ -54,9 +54,9 @@ def parse_cmdline() -> argparse.Namespace:
 
 def get_build_flags(build_type: str) -> str:
     flags = ''
-    if build_type == 'Release':
+    if build_type == 'Debug':
         flags = '-gcflags "-N -l"'
-    elif build_type == 'Debug':
+    elif build_type == 'Release':
         flags = '-ldflags "-s -w"'
     return flags
 
@@ -75,13 +75,18 @@ def get_build_apps(apps: List[str]) -> List[str]:
     return build_apps
 
 
-def build_app(app: str, flag: str) -> None:
+def build_app(app: str, build_type: str) -> None:
+    flag = get_build_flags(build_type)
     cmd = 'go build {} ./cmd/{}'.format(flag, app)
     logging.debug('run command: %s', cmd)
     res = subprocess.call(cmd, shell=True)
     if res != 0:
         logging.error("Fail to build %s", app)
         exit(1)
+    if not build_type == "Release":
+        return
+    app_path = os.path.join(os.getcwd(), app)
+    strip_app(app_path)
 
 
 def move_app(app: str):
@@ -113,7 +118,6 @@ def install_app(app: str):
     res = subprocess.call('mv {} {}'.format(file_path, des_path), shell=True)
     if res != 0:
         logging.error("安装 app 失败： %s", app)
-    strip_app(os.path.join(des_path, app))
 
 
 def strip_app(file_path: str):
@@ -131,11 +135,8 @@ if __name__ == "__main__":
     args = parse_cmdline()
     setLogger(args.log)
 
-    apps = get_build_apps(args.apps)
-    flag = get_build_flags(args.build_type)
-
-    for app in apps:
-        build_app(app, flag)
+    for app in get_build_apps(args.apps):
+        build_app(app, args.build_type)
         move_app(app)
         if args.install is True:
             logging.debug("安装 app: %s", app)
