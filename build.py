@@ -137,6 +137,6 @@ if __name__ == "__main__":
     for app in apps:
         build_app(app, flag)
         move_app(app)
-        if args.install != None:
+        if args.install is True:
             logging.debug("安装 app: %s", app)
             install_app(app)
