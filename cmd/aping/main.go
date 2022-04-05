@@ -5,12 +5,15 @@ Copyright © 2022 NAME HERE <EMAIL ADDRESS>
 package main
 
 import (
+	"context"
 	"sync"
 	"time"
 
 	"atools/internal"
+
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"golang.org/x/sync/semaphore"
 )
 
 var (
@@ -18,7 +21,7 @@ var (
 	interval  int
 	coroutine int
 
-	sem     *internal.Semaphore
+	sem     *semaphore.Weighted
 	waitDog sync.WaitGroup
 )
 
@@ -35,7 +38,7 @@ func main() {
 	rootCmd.Flags().IntVarP(&interval, "interval", "i", 0, "seconds between sending each packet")
 	rootCmd.Flags().IntVar(&coroutine, "coroutine", 10, "coroutine that can be opend. Too many coroutine may cause inaccurate time")
 
-	sem = internal.NewSemaphore(coroutine)
+	sem = semaphore.NewWeighted(int64(coroutine))
 
 	if err := rootCmd.Execute(); err != nil {
 		logrus.Error(err)
@@ -43,12 +46,15 @@ func main() {
 }
 
 func doPing(cmd *cobra.Command, args []string) {
-	wgWrap := func(f func(string) error, url string) {
-		sem.Acquire()
-		defer sem.Release()
+	wgWrap := func(Func func(string) error, url string) {
+		if err := sem.Acquire(context.TODO(), 1); err != nil {
+			logrus.Fatal(err)
+		}
+
+		defer sem.Release(1)
 		defer waitDog.Done()
 
-		if err := f(url); err != nil {
+		if err := Func(url); err != nil {
 			logrus.Error(err)
 
 			return
