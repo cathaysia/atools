@@ -1,96 +1,25 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
+
+	"atools/internal"
+	"github.com/sirupsen/logrus"
 )
-
-func runCMD(cmd string, args []string) {
-	// TODO: 检查 cmd 是否是别名
-	if lp, err := exec.LookPath(cmd); err != nil {
-		fmt.Println(lp)
-		// 如果 cmd 没办法找到
-		cmd = os.Getenv("SHELL")
-		args = []string{
-			cmd, "-c", `'` + strings.Join(args, " ") + `'`,
-		}
-	} else {
-		cmd = lp
-		args[0] = lp
-	}
-
-	proc := exec.Command(cmd, "")
-	proc.Stdout = os.Stdout
-	proc.Stderr = os.Stderr
-	proc.Stdin = os.Stdin
-	proc.Args = args
-
-	err := proc.Run()
-	if err == nil {
-		return
-	}
-
-	var exitError exec.ExitError
-
-	if ok := errors.As(err, &exitError); ok {
-		os.Exit(exitError.ExitCode())
-	}
-
-	panic(err)
-}
-
-func checkArgs() {
-	if len(os.Args) == 1 {
-		fmt.Println("Usage: aproxy [<command>]")
-
-		os.Exit(0)
-	}
-}
-
-func setEnvByMap(envs map[string]string) error {
-	for name, value := range envs {
-		if err := os.Setenv(name, value); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func setAlias(aproxy string) {
-	switch os.Args[1] {
-	case "curl":
-		os.Args = append(os.Args, "--proxy", aproxy)
-	case "git":
-		os.Args = append([]string{
-			os.Args[0],
-			os.Args[1],
-			"-c", fmt.Sprintf("http.proxy=%s", aproxy),
-			"-c", fmt.Sprintf("https.proxy=%s", aproxy),
-			"-c", "http.sslVerify=false",
-			"-c", "https.sslVerify=false",
-		}, os.Args[2:]...)
-	case "svn":
-		// TODO: 这个还没测试
-		pos := strings.Index(aproxy, ":")
-		os.Args = append([]string{
-			os.Args[0],
-			os.Args[1],
-			"--config-option", fmt.Sprintf("servers:global:http-proxy-host=%s", aproxy[:pos]),
-			"--config-option", fmt.Sprintf("servers:global:http-proxy-port=%s", aproxy[pos:]),
-		}, os.Args[2:]...)
-	}
-}
 
 func main() {
 	checkArgs()
+	logrus.SetLevel(logrus.TraceLevel)
 
 	aproxy, ok := os.LookupEnv("APROXY")
 	if !ok {
-		runCMD(os.Args[1], os.Args[2:])
+		err := runCMD(os.Args[1], os.Args[2:])
+		if err != nil {
+			panic(err)
+		}
 
 		return
 	}
@@ -103,9 +32,102 @@ func main() {
 		"GOPROXY":     "https://goproxy.cn",
 	}
 
-	if err := setEnvByMap(envs); err != nil {
+	if err := setEnvs(envs); err != nil {
 		panic(err)
 	}
 
-	runCMD(os.Args[1], os.Args[1:])
+	// replaceCMD(aproxy)
+	os.Args = append([]string{
+		os.Args[0],
+		os.Args[1],
+	}, append(getExtraArgsForCMD(os.Args[1], aproxy), os.Args[2:]...)...)
+
+	err := runCMD(os.Args[1], os.Args[2:])
+	if exitError, ok := err.(*exec.ExitError); ok {
+		os.Exit(exitError.ExitCode())
+	}
+
+	if err != nil {
+		panic(err)
+	}
+}
+
+func runCMD(cmd string, args []string) error {
+	// cmd 有三种情况：
+	// 1. cmd 是一个可在 PATH 中找到的二进制文件
+	// 2. cmd 是一个 shell 的 alias
+	// 3. cmd 是一个 shell 命令
+	// 后两种的处理方式相同：直接运行 zsh -c 'source ~/.zshrc && cmd'
+	cmd, err := exec.LookPath(cmd)
+	if err != nil {
+		currentShell := internal.GetCurrentShell()
+
+		profile, err := internal.GetShellProfile(currentShell)
+		if err != nil {
+			return err
+		}
+
+		args = []string{
+			"-c",
+			fmt.Sprintf(`"source %v && %v %v"`, profile, cmd, strings.Join(args, " ")),
+		}
+		cmd = currentShell
+	}
+
+	proc := exec.Command(cmd, args...)
+	proc.Stdout = os.Stdout
+	proc.Stderr = os.Stderr
+	proc.Stdin = os.Stdin
+
+	logrus.Debugf("proc: %v", proc)
+
+	return proc.Run()
+}
+
+func checkArgs() {
+	if len(os.Args) == 1 {
+		fmt.Println("Usage: aproxy [<command>]")
+
+		os.Exit(0)
+	}
+}
+
+func setEnvs(envs map[string]string) error {
+	for name, value := range envs {
+		if err := os.Setenv(name, value); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func getExtraArgsForCMD(cmd string, aproxy string) []string {
+	if cmd == "curl" {
+		return []string{
+			"--proxy",
+			aproxy,
+		}
+	}
+
+	if cmd == "git" {
+		return []string{
+			"-c", fmt.Sprintf("http.proxy=%s", aproxy),
+			"-c", fmt.Sprintf("https.proxy=%s", aproxy),
+			"-c", "http.sslVerify=false",
+			"-c", "https.sslVerify=false",
+		}
+	}
+
+	if cmd == "svn" {
+		// TODO: 这个还没测试
+		pos := strings.Index(aproxy, ":")
+
+		return []string{
+			"--config-option", fmt.Sprintf("servers:global:http-proxy-host=%s", aproxy[:pos]),
+			"--config-option", fmt.Sprintf("servers:global:http-proxy-port=%s", aproxy[pos:]),
+		}
+	}
+
+	return []string{}
 }
