@@ -31,8 +31,10 @@ func Doh(provider string, url string) (map[string]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	var response *dns.Response
-	var err error
+	var (
+		response *dns.Response
+		err      error
+	)
 
 	switch provider {
 	case "auto":
