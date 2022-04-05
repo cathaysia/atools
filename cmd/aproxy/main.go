@@ -58,9 +58,9 @@ func runCMD(cmd string, args []string) error {
 	// 2. cmd 是一个 shell 的 alias
 	// 3. cmd 是一个 shell 命令
 	// 后两种的处理方式相同：直接运行 zsh -c 'source ~/.zshrc && cmd'
-	cmd, err := exec.LookPath(cmd)
+	currentShell, err := exec.LookPath(cmd)
 	if err != nil {
-		currentShell := internal.GetCurrentShell()
+		currentShell = internal.GetCurrentShell()
 
 		profile, err := internal.GetShellProfile(currentShell)
 		if err != nil {
@@ -71,8 +71,9 @@ func runCMD(cmd string, args []string) error {
 			"-c",
 			fmt.Sprintf(`"source %v && %v %v"`, profile, cmd, strings.Join(args, " ")),
 		}
-		cmd = currentShell
 	}
+
+	cmd = currentShell
 
 	proc := exec.Command(cmd, args...)
 	proc.Stdout = os.Stdout
