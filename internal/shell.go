@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -11,10 +10,24 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+type ShellError struct {
+	msg string
+}
+
+func (e ShellError) Error() string {
+	return fmt.Sprintf(e.msg)
+}
+
+func NewShellError(msg string) error {
+	return ShellError{
+		msg: msg,
+	}
+}
+
 var (
-	ErrHOMENotExists = errors.New("HOME nev doesn't exists")
-	Errshell         = errors.New("Shell cannot recognition")
-	ErrSystem        = errors.New("System Not Support")
+	ErrHOMENotExists = NewShellError("HOME nev doesn't exists")
+	ErrShell         = NewShellError("Shell cannot recognition")
+	ErrSystem        = NewShellError("System Not Support")
 )
 
 func ErrAPROXY(msg string, err error) error {
@@ -68,5 +81,5 @@ func GetShellProfile(shell string) (string, error) {
 		return fmt.Sprintf("%v/.zshrc", home), nil
 	}
 
-	return "", Errshell
+	return "", ErrShell
 }
