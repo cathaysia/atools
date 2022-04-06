@@ -89,7 +89,7 @@ def build_app(app: str, build_type: str) -> None:
     res = subprocess.call(cmd, shell=True)
     if res != 0:
         logging.error("Fail to build %s", app)
-        exit(1)
+        exit(res)
     if not build_type == "Release":
         return
     app_path = os.path.join(os.getcwd(), app)
