@@ -75,6 +75,13 @@ def get_build_apps(apps: List[str]) -> List[str]:
     return build_apps
 
 
+def tidy_project():
+    cmd = 'go mod tidy'
+    res = subprocess.call(cmd, shell=True)
+    if res != 0:
+        exit(res)
+
+
 def build_app(app: str, build_type: str) -> None:
     flag = get_build_flags(build_type)
     cmd = 'go build {} ./cmd/{}'.format(flag, app)
@@ -134,6 +141,7 @@ def strip_app(file_path: str):
 if __name__ == "__main__":
     args = parse_cmdline()
     setLogger(args.log)
+    tidy_project()
 
     for app in get_build_apps(args.apps):
         build_app(app, args.build_type)
