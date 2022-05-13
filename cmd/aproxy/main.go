@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"atools/internal"
+
 	"github.com/sirupsen/logrus"
 )
 
@@ -17,6 +18,10 @@ func main() {
 	aproxy, ok := os.LookupEnv("APROXY")
 	if !ok {
 		err := runCMD(os.Args[1], os.Args[2:])
+		if exitError, ok := err.(*exec.ExitError); ok {
+			os.Exit(exitError.ExitCode())
+		}
+
 		if err != nil {
 			panic(err)
 		}
