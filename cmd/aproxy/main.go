@@ -102,6 +102,10 @@ func checkArgs() {
 
 func setEnvs(envs map[string]string) error {
 	for name, value := range envs {
+		if os.Getenv(name) != "" {
+			continue
+		}
+
 		if err := os.Setenv(name, value); err != nil {
 			return err
 		}
