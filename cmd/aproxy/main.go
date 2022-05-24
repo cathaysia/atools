@@ -29,11 +29,21 @@ func main() {
 		return
 	}
 
+	aproxyHTTPS, ok := os.LookupEnv("APROXY_HTTPS")
+	if !ok {
+		aproxyHTTPS = aproxy
+	}
+
+	aproxyFTP, ok := os.LookupEnv("APROXY_FTP")
+	if !ok {
+		aproxyFTP = aproxy
+	}
+
 	envs := map[string]string{
 		"ALL_PROXY":                aproxy,
 		"http_proxy":               aproxy,
-		"https_proxy":              aproxy,
-		"ftp_proxy":                aproxy,
+		"https_proxy":              aproxyHTTPS,
+		"ftp_proxy":                aproxyFTP,
 		"GOPROXY":                  "https://goproxy.cn",
 		"PUB_HOSTED_URL":           "https://pub.flutter-io.cn",
 		"FLUTTER_STORAGE_BASE_URL": "https://storage.flutter-io.cn",
