@@ -13,7 +13,7 @@ import (
 
 func main() {
 	checkArgs()
-	logrus.SetLevel(logrus.TraceLevel)
+	logrus.SetLevel(logrus.ErrorLevel)
 
 	aproxy, ok := os.LookupEnv("APROXY")
 	if !ok {
